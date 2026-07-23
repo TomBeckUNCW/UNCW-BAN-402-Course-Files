@@ -1,0 +1,252 @@
+---
+title: "Module 4 Assignment 3"
+output: word_document
+date: "2026-07-14"
+---
+
+```{r}
+library(tidymodels)
+library(tidyverse)
+library(caret)
+library(vip)
+library(gridExtra)
+library(ranger)
+```
+
+## R Markdown
+
+
+
+```{r}
+drug = read_csv("drug_data-2.csv")
+```
+
+## Including Plots
+
+
+
+```{r}
+names(drug) = c("ID", "Age", "Gender", "Education", "Country", "Ethnicity",
+"Nscore", "Escore", "Oscore", "Ascore", "Cscore", "Impulsive",
+"SS", "Alcohol", "Amphet", "Amyl", "Benzos", "Caff", "Cannabis",
+"Choc", "Coke", "Crack", "Ecstasy", "Heroin", "Ketamine", "Legalh",
+"LSD", "Meth", "Mushrooms", "Nicotine", "Semer", "VSA")
+```
+
+```{r}
+drug[drug == "CL0"] = "No"
+drug[drug == "CL1"] = "No"
+drug[drug == "CL2"] = "Yes"
+drug[drug == "CL3"] = "Yes"
+drug[drug == "CL4"] = "Yes"
+drug[drug == "CL5"] = "Yes"
+drug[drug == "CL6"] = "Yes"
+```
+
+```{r}
+drug_clean = drug %>% mutate_at(vars(Age:Ethnicity), funs(as_factor)) %>%
+mutate(Age = factor(Age, labels = c("18_24", "25_34", "35_44", "45_54",
+"55_64", "65_"))) %>%
+mutate(Gender = factor(Gender, labels = c("Male", "Female"))) %>%
+mutate(Education = factor(Education, labels = c("Under16", "At16", "At17", "At18",
+"SomeCollege","ProfessionalCert",
+"Bachelors", "Masters",
+"Doctorate"))) %>%
+mutate(Country = factor(Country, labels = c("USA", "NewZealand", "Other", "Australia",
+"Ireland","Canada","UK"))) %>%
+mutate(Ethnicity = factor(Ethnicity, labels = c("Black", "Asian", "White",
+"White/Black", "Other",
+"White/Asian", "Black/Asian"))) %>%
+mutate_at(vars(Alcohol:VSA), funs(as_factor)) %>%
+select(-ID)
+```
+
+
+```{r}
+str(drug_clean)
+```
+
+```{r}
+drug_clean = drug_clean %>% select(!(Alcohol:Mushrooms)) %>% select(!(Semer:VSA))
+```
+
+```{r}
+library(naniar)
+gg_miss_var(drug_clean)
+```
+```{r}
+set.seed(1234) 
+drug_clean_split = initial_split(drug_clean, prop = 0.7, strata = Nicotine) #70% in training
+train = training(drug_clean_split)
+test = testing(drug_clean_split)
+```
+
+```{r}
+library(ggplot2)
+
+# --- Group 1: Demographics (Categorical) ---
+p1 <- ggplot(drug_clean, aes(x = Age, fill = Nicotine)) + 
+  geom_bar(position = "fill") + 
+  labs(y = "Proportion", title = "Nicotine by Age") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+p2 <- ggplot(drug_clean, aes(x = Gender, fill = Nicotine)) + 
+  geom_bar(position = "fill") + 
+  labs(y = "Proportion", title = "Nicotine by Gender")
+
+p3 <- ggplot(drug_clean, aes(x = Education, fill = Nicotine)) + 
+  geom_bar(position = "fill") + 
+  labs(y = "Proportion", title = "Nicotine by Education") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+p4 <- ggplot(drug_clean, aes(x = Country, fill = Nicotine)) + 
+  geom_bar(position = "fill") + 
+  labs(y = "Proportion", title = "Nicotine by Country")
+
+
+# --- Group 2: Ethnicity & Personality Scores (N, E, O) ---
+p5 <- ggplot(drug_clean, aes(x = Ethnicity, fill = Nicotine)) + 
+  geom_bar(position = "fill") + 
+  labs(y = "Proportion", title = "Nicotine by Ethnicity") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+p6 <- ggplot(drug_clean, aes(x = Nicotine, y = Nscore, fill = Nicotine)) + 
+  geom_boxplot() + 
+  labs(title = "Neurotism (Nscore)")
+
+p7 <- ggplot(drug_clean, aes(x = Nicotine, y = Escore, fill = Nicotine)) + 
+  geom_boxplot() + 
+  labs(title = "Extraversion (Escore)")
+
+p8 <- ggplot(drug_clean, aes(x = Nicotine, y = Oscore, fill = Nicotine)) + 
+  geom_boxplot() + 
+  labs(title = "Openness (Oscore)")
+
+
+# --- Group 3: Personality Scores (A, C, Impulsive, SS) ---
+p9 <- ggplot(drug_clean, aes(x = Nicotine, y = Ascore, fill = Nicotine)) + 
+  geom_boxplot() + 
+  labs(title = "Agreeableness (Ascore)")
+
+p10 <- ggplot(drug_clean, aes(x = Nicotine, y = Cscore, fill = Nicotine)) + 
+  geom_boxplot() + 
+  labs(title = "Conscientiousness (Cscore)")
+
+p11 <- ggplot(drug_clean, aes(x = Nicotine, y = Impulsive, fill = Nicotine)) + 
+  geom_boxplot() + 
+  labs(title = "Impulsivity")
+
+p12 <- ggplot(drug_clean, aes(x = Nicotine, y = SS, fill = Nicotine)) + 
+  geom_boxplot() + 
+  labs(title = "Sensation Seeking")
+# Display the first 4 plots (Demographics)
+grid.arrange(p1, p2, p3, p4, ncol = 2, nrow = 2)
+
+# Display the next 4 plots
+grid.arrange(p5, p6, p7, p8, ncol = 2, nrow = 2)
+
+# Display the final 4 plots
+grid.arrange(p9, p10, p11, p12, ncol = 2, nrow = 2)
+```
+
+```{r}
+
+# Ensure tidymodels is set to use the ranger engine
+# (Note: ranger handles variable importance if needed later)
+
+# --- 1. Define the Recipe ---
+# Predict Nicotine using all other variables in drug_clean
+rf_recipe <- recipe(Nicotine ~ ., data = train)
+
+# --- 2. Model Specification ---
+# Allow mtry and min_n to be tuned, set trees to 100, and use the ranger engine
+rf_spec <- rand_forest(
+  mtry = tune(),
+  min_n = tune(),
+  trees = 100
+) %>% 
+  set_engine("ranger", importance = "permutation") %>% 
+  set_mode("classification")
+
+# --- 3. Create the Workflow ---
+rf_workflow <- workflow() %>% 
+  add_recipe(rf_recipe) %>% 
+  add_model(rf_spec)
+
+# --- 4. Set up 5-Fold Cross-Validation ---
+# Set the fold seed to 123 as instructed
+set.seed(123)
+rf_folds <- vfold_cv(train, v = 5, strata = Nicotine)
+
+# --- 5. Define the Tuning Grid ---
+# Allow mtry between 2 and 8, min_n between 5 and 20, with 10 levels
+rf_grid <- grid_regular(
+  mtry(range = c(2, 8)),
+  min_n(range = c(5, 20)),
+  levels = 10
+)
+
+# --- 6. Tune the Grid ---
+# Set the tuning seed to 123 as instructed
+set.seed(123)
+rf_tuning_results <- tune_grid(
+  rf_workflow,
+  resamples = rf_folds,
+  grid = rf_grid,
+  metrics = metric_set(accuracy) # We focus on accuracy for the question
+)
+
+# --- 7. Visualize the Tuning Performance ---
+# This will generate the plot to help you find the highest accuracy value
+autoplot(rf_tuning_results)
+```
+
+
+```{r}
+# --- 1. Select the Best Parameters ---
+# This automatically extracts the mtry and min_n that gave the highest accuracy
+best_rf_params <- select_best(rf_tuning_results, metric = "accuracy")
+
+# --- 2. Finalize the Workflow ---
+# This plugs the best mtry and min_n values back into your workflow
+final_rf_workflow <- finalize_workflow(rf_workflow, best_rf_params)
+
+# --- 3. Fit the Final Model to the Training Set ---
+# We fit this finalized workflow to our training data
+final_rf_fit <- fit(final_rf_workflow, data = train)
+
+# --- 4. Extract and Plot Variable Importance ---
+# We pull the underlying engine fit (ranger) to extract the importance scores
+
+final_rf_fit %>%
+  extract_fit_parsnip() %>%
+  vip(num_features = 10) # Displays the top 10 most important variables
+```
+
+```{r}
+# 1. Generate predictions on the training set
+train_preds <- predict(final_rf_fit, new_data = train) %>%
+  bind_cols(train)
+
+# 2. Calculate accuracy
+train_preds %>% 
+  accuracy(truth = Nicotine, estimate = .pred_class)
+```
+
+
+```{r}
+# Calculate the proportions of "Yes" and "No" in the training set
+train %>%
+  count(Nicotine) %>%
+  mutate(prop = n / sum(n))
+```
+```{r}
+# 1. Generate predictions on the testing set
+test_preds <- predict(final_rf_fit, new_data = test) %>%
+  bind_cols(test)
+
+# 2. Calculate accuracy
+test_preds %>% 
+  accuracy(truth = Nicotine, estimate = .pred_class)
+```
+

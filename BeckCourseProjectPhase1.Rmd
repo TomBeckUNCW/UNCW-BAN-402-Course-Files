@@ -1,0 +1,94 @@
+---
+title: "BeckCourseProjectPhase1"
+output: word_document
+date: "2026-07-15"
+---
+#Course Project Phase 1 Data#
+
+##Libraries##
+```{r}
+library(tidyverse)
+library(tidymodels)
+library(VIM)
+library(mice)
+library(naniar)
+library(skimr)
+library(ggplot2)
+library(gridExtra)
+```
+
+##The Data Sets##
+
+```{r}
+sampledata = read_csv("sample_submission.csv")
+train = read_csv("train.csv")
+test = read_csv("test.csv")
+```
+
+##Missing Data Check##
+###Sample Data###
+
+```{r}
+gg_miss_var(sampledata)
+```
+###Train Data###
+```{r}
+gg_miss_var(train)
+```
+
+###Test Data###
+```{r}
+gg_miss_var(test)
+```
+##Training Data Visualization##
+### Conversion###
+```{r}
+train = train %>% mutate(failure = factor(failure))
+```
+###Attribute Comparison Visualization###
+```{r}
+p1 = ggplot(train, aes(x = attribute_2, fill = failure)) + geom_bar(position = "fill")
+p2 = ggplot(train, aes(x = attribute_3, fill = failure)) + geom_bar(position = "fill")
+grid.arrange(p1,p2)
+```
+###Measurements 0-3 Data Visualization###
+```{r}
+p3 = ggplot(train, aes(x = measurement_0, fill = failure)) + geom_bar(position = "fill")
+p4 = ggplot(train, aes(x = measurement_1, fill = failure)) + geom_bar(position = "fill")
+p5 = ggplot(train, aes(x = measurement_2, fill = failure)) + geom_bar(position = "fill")
+p6 = ggplot(train, aes(x = measurement_3, fill = failure)) + geom_bar(position = "fill")
+grid.arrange(p3,p4,p5,p6)
+```
+###Measurements 4-7 Data Visualization###
+```{r}
+p7 = ggplot(train, aes(x = measurement_4, fill = failure)) + geom_bar(position = "fill")
+p8 = ggplot(train, aes(x = measurement_5, fill = failure)) + geom_bar(position = "fill")
+p9 = ggplot(train, aes(x = measurement_6, fill = failure)) + geom_bar(position = "fill")
+p10 = ggplot(train, aes(x = measurement_7, fill = failure)) + geom_bar(position = "fill")
+grid.arrange(p7,p8,p9,p10)
+```
+###Measurements 8-11 Data Visualization###
+```{r}
+p11 = ggplot(train, aes(x = measurement_8, fill = failure)) + geom_bar(position = "fill")
+p12 = ggplot(train, aes(x = measurement_9, fill = failure)) + geom_bar(position = "fill")
+p13 = ggplot(train, aes(x = measurement_10, fill = failure)) + geom_bar(position = "fill")
+p14 = ggplot(train, aes(x = measurement_11, fill = failure)) + geom_bar(position = "fill")
+grid.arrange(p11,p12,p13,p14)
+```
+###Measurements 12-15 Data Visualization###
+```{r}
+p15 = ggplot(train, aes(x = measurement_12, fill = failure)) + geom_bar(position = "fill")
+p16 = ggplot(train, aes(x = measurement_13, fill = failure)) + geom_bar(position = "fill")
+p17 = ggplot(train, aes(x = measurement_14, fill = failure)) + geom_bar(position = "fill")
+p18 = ggplot(train, aes(x = measurement_15, fill = failure)) + geom_bar(position = "fill")
+grid.arrange(p15,p16,p17,p18)
+```
+###Measurements 16 And 17 Data Visualization###
+```{r}
+p19 = ggplot(train, aes(x = measurement_16, fill = failure)) + geom_bar(position = "fill")
+p20 = ggplot(train, aes(x = measurement_17, fill = failure)) + geom_bar(position = "fill")
+grid.arrange(p19,p20)
+```
+
+
+

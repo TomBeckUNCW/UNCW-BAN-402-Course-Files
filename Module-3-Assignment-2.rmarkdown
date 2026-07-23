@@ -1,0 +1,200 @@
+---
+title: "Module 3 Assignment 2"
+format: docx
+editor: visual
+---
+
+## Module 3 Assignment 2
+
+```{r}
+library(tidyverse)
+library(tidymodels)
+library(e1071)
+library(ROCR)
+library(GGally)
+```
+
+```{r}
+parole = read_csv("parole.csv")
+```
+
+```{r}
+parole <- parole %>%
+  mutate(male = factor(male, 
+                       levels = c(0, 1), 
+                       labels = c("female", "male")))
+parole <- parole %>%
+  mutate(race = factor(race, 
+                       levels = c(1, 2), 
+                       labels = c("otherwise", "white")))
+parole <- parole %>%
+  mutate(state = factor(state, 
+                       levels = c(1, 2, 3, 4), 
+                       labels = c("other", "Kentucky", "Louisiana", "Virginia")))
+parole <- parole %>%
+  mutate(multiple.offenses = factor(multiple.offenses, 
+                       levels = c(0, 1), 
+                       labels = c("otherwise", "parolee was incarcerated for multiple offenses")))
+parole <- parole %>%
+  mutate(violator = factor(violator, 
+                       levels = c(0, 1), 
+                       labels = c("No", "Yes")))
+parole <- parole %>%
+  mutate(crime = factor(crime, 
+                        levels = c(1, 2, 3, 4), 
+                        labels = c("other", "larceny", "drug-related crime", "driving-related crime")))
+```
+
+```{r}
+table(parole$violator)
+```
+
+```{r}
+set.seed(12345)
+parole_split = initial_split(parole, prop = 0.70, strata = violator)
+train = training(parole_split)
+test = testing(parole_split)
+```
+
+```{r}
+train = train %>% mutate(violator = fct_relevel(violator, c("No","Yes")))
+levels(train$violator)
+```
+
+```{r}
+parole %>%
+  select(male, state, max.sentence, violator) %>%
+  ggpairs(aes(color = violator, alpha = 0.5))
+```
+
+```{r}
+# Fit the logistic regression model
+model_state <- glm(violator ~ state, data = train, family = binomial)
+summary(model_state)
+```
+
+```{r}
+parole_model = 
+  logistic_reg(mode = "classification") %>% #note the use of logistic_reg and mode = "classification"
+  set_engine("glm") #standard logistic regression engine is glm
+
+parole_recipe = recipe(violator ~ state + multiple.offenses + race, train)
+
+logreg_wf = workflow() %>%
+  add_recipe(parole_recipe) %>% 
+  add_model(parole_model)
+
+parole_fit = fit(logreg_wf, train)
+```
+
+```{r}
+tidy(parole_fit)
+```
+
+```{r}
+# 1. Create a data frame for the specific parolee
+new_parolee <- tibble(
+  state = factor("Louisiana", levels = c("other", "Kentucky", "Louisiana", "Virginia")),
+  multiple.offenses = factor("parolee was incarcerated for multiple offenses", levels = c("otherwise", "parolee was incarcerated for multiple offenses")),
+  race = factor("white", levels = c("otherwise", "white"))
+)
+
+# 2. Predict the probability of violating parole
+predict(parole_fit, new_data = new_parolee, type = "prob")
+```
+
+```{r}
+# 1. Generate predictions (probabilities) on the training set
+# We use type = "prob" and select the .pred_Yes column
+train_preds <- predict(parole_fit, new_data = train, type = "prob") %>%
+  bind_cols(train) # Combines the probabilities with the actual data
+
+# 2. Create the ROCR prediction object
+# Argument 1: The predicted probabilities of the positive class ("Yes")
+# Argument 2: The actual true outcomes
+pred_object <- prediction(train_preds$.pred_Yes, train_preds$violator)
+
+# 3. Calculate performance metrics for the ROC curve
+perf_roc <- performance(pred_object, "tpr", "fpr")
+
+# Plot the ROC Curve (Optional, but good practice to visualize)
+plot(perf_roc, colorize = TRUE, main = "ROC Curve - Training Set")
+
+# 4. Find the threshold that best balances Sensitivity and Specificity
+# We extract sensitivity (tpr), specificity (1 - fpr), and the cutoffs
+sens <- performance(pred_object, "tpr")@y.values[[1]]
+spec <- performance(pred_object, "tnr")@y.values[[1]] # True Negative Rate is Specificity
+cutoffs <- performance(pred_object, "tpr")@x.values[[1]] # The thresholds
+
+# Put them in a data frame and find where the absolute difference is smallest
+roc_data <- tibble(cutoff = cutoffs, sens = sens, spec = spec) %>%
+  mutate(difference = abs(sens - spec))
+
+optimal_threshold <- roc_data %>%
+  arrange(difference) %>%
+  slice(1)
+
+# Print the result
+print(optimal_threshold)
+```
+
+```{r}
+# 1. Replace 0.XXXX with your exact cutoff number from Question 10
+my_cutoff <- 0.0863
+
+# 2. Apply the cutoff to classify predictions as "Yes" or "No"
+train_results <- predict(parole_fit, new_data = train, type = "prob") %>%
+  bind_cols(train) %>%
+  mutate(pred_class = factor(if_else(.pred_Yes >= my_cutoff, "Yes", "No"), 
+                             levels = c("No", "Yes")))
+
+# 3. Calculate the overall accuracy
+train_results %>%
+  accuracy(truth = violator, estimate = pred_class)
+```
+
+```{r}
+# 1. Replace 0.XXXX with your exact cutoff number from Question 10
+my_cutoff <- 0.0863
+
+# 2. Apply the cutoff to classify predictions as "Yes" or "No"
+train_results <- predict(parole_fit, new_data = train, type = "prob") %>%
+  bind_cols(train) %>%
+  mutate(pred_class = factor(if_else(.pred_Yes >= my_cutoff, "Yes", "No"), 
+                             levels = c("No", "Yes")))
+
+# 3. Calculate the overall accuracy
+train_results %>%
+  sens(truth = violator, estimate = pred_class)
+```
+
+```{r}
+# Test the four options on the training set
+thresholds <- c(0.2, 0.3, 0.4, 0.5)
+
+training_accuracies <- map_df(thresholds, function(t) {
+  train_results <- predict(parole_fit, new_data = train, type = "prob") %>%
+    bind_cols(train) %>%
+    mutate(pred_class = factor(if_else(.pred_Yes >= t, "Yes", "No"), levels = c("No", "Yes")))
+  
+  acc <- train_results %>% accuracy(truth = violator, estimate = pred_class)
+  
+  tibble(threshold = t, accuracy = acc$.estimate)
+})
+
+training_accuracies$accuracy
+```
+
+```{r}
+# 1. Replace 0.X with your winning threshold from Question 13 (e.g., 0.3 or 0.4)
+best_threshold <- 0.5
+
+# 2. Generate predictions on the TEST data using that threshold
+test_results <- predict(parole_fit, new_data = test, type = "prob") %>%
+  bind_cols(test) %>%
+  mutate(pred_class = factor(if_else(.pred_Yes >= best_threshold, "Yes", "No"), levels = c("No", "Yes")))
+
+# 3. Calculate the test accuracy
+test_results %>% 
+  accuracy(truth = violator, estimate = pred_class)
+```

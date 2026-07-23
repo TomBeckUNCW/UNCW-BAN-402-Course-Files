@@ -1,0 +1,102 @@
+---
+title: "Module 6 Assignment 1"
+output: word_document
+date: "2026-07-21"
+---
+
+```{r}
+library(tidyverse)
+library(cluster)
+library(factoextra)
+library(dendextend)
+```
+
+## R Markdown
+
+
+```{r}
+trucks = read_csv("trucks-1.csv")
+```
+
+## Including Plots
+
+
+```{r}
+ggplot(trucks, aes(x=Distance,y=Speeding)) + geom_point()
+```
+```{r}
+# Scale and center Distance and Speeding using scale()
+trucks_cleaned = trucks %>%
+  select(Distance, Speeding) %>%
+  scale() %>%
+  as.data.frame()
+
+# Find the maximum value of Distance
+round(max(trucks_cleaned$Distance), 5)
+```
+```{r}
+# Set seed and run k-means
+set.seed(64)
+kmeans_k2 <- kmeans(trucks_cleaned, centers = 2)
+
+# Add the cluster factor directly to the original trucks data frame
+trucks$cluster <- as.factor(kmeans_k2$cluster)
+
+# Plot using the new 'cluster' column
+ggplot(trucks, aes(x = Distance, y = Speeding, color = cluster)) +
+  geom_point(alpha = 0.6) +
+  labs(title = "k-Means Clustering (k = 2)",
+       x = "Distance",
+       y = "Speeding",
+       color = "Cluster") +
+  theme_minimal()
+```
+
+```{r}
+library(factoextra)
+library(gridExtra)
+
+# Set seed as required
+set.seed(412)
+
+# Generate plots for k = 1 to 8
+p <- list()
+for (i in 1:8) {
+  km <- kmeans(trucks_cleaned, centers = i)
+  p[[i]] <- fviz_cluster(km, data = trucks_cleaned, geom = "point", 
+                         ellipse.type = "convex", ggtheme = theme_minimal(),
+                         main = paste("k =", i))
+}
+
+# Display in a grid
+grid.arrange(grobs = p, ncol = 3)
+```
+
+```{r}
+# Method 1: Using factoextra (easiest)
+fviz_nbclust(trucks_cleaned, kmeans, method = "wss") +
+  labs(title = "Elbow Method for Optimal k",
+       x = "Number of Clusters (k)",
+       y = "Total Within Sum of Square")
+```
+
+```{r}
+# 1. Set seed to 64 as instructed
+set.seed(64)
+
+# 2. Run k-means with k = 4
+kmeans_k4 <- kmeans(trucks_cleaned, centers = 4)
+
+# 3. Add cluster labels back to trucks data
+trucks$cluster_k4 <- as.factor(kmeans_k4$cluster)
+
+# 4. Visualize the 4 clusters
+ggplot(trucks, aes(x = Distance, y = Speeding, color = cluster_k4)) +
+  geom_point(alpha = 0.7) +
+  labs(title = "k-Means Clustering (k = 4)",
+       x = "Distance",
+       y = "Speeding",
+       color = "Cluster") +
+  theme_minimal()
+```
+

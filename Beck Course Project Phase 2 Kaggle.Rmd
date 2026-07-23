@@ -1,0 +1,83 @@
+---
+title: "Beck Course Project Phase 2 Kaggle"
+output: word_document
+date: "2026-07-23"
+---
+#Course Project Kaggle Deliverable
+##Libraries
+```{r}
+library(tidyverse)
+library(tidymodels)
+library(e1071)
+library(ROCR)
+library(GGally)
+library(mice)
+library(VIM)
+library(rpart)
+library(rpart.plot)
+library(RColorBrewer)
+library(rattle)
+library(naniar)
+library(skimr)
+library(UpSetR)
+```
+
+##Testing Data Read-in and Mutation
+
+```{r}
+Testing=read_csv("test.csv")
+Testing = Testing %>% mutate(product_code = as_factor(product_code))%>%
+  mutate(attribute_0 = as_factor(attribute_0)) %>% mutate(attribute_1 = as_factor(attribute_1))
+```
+
+## Finding the Missing Data
+
+```{r}
+gg_miss_var(Testing)
+```
+
+##Imputing the Missing Data
+```{r}
+set.seed(1234)
+imp_measurements2 = mice(Testing, m = 70, method='pmm', printFlag=FALSE)#The m value was calculated by finding an estimated sum of all of the missing data and dividing it by the total number of observatuons
+```
+##Data Merge
+```{r}
+Testing_complete = complete(imp_measurements2)
+```
+
+#Splitting The Data
+```{r}
+set.seed(1234)
+Testing_split = initial_split(Testing_complete, prop = 0.70)
+Testingtrain = training(Testing_split)
+Testingtest = testing(Testing_split)
+```
+##Logistic Model
+```{r}
+TestingLog_model = logistic_reg(mode = "classification") %>%
+  set_engine("glm")
+
+Testing_recipe = recipe(failure ~ ., data = train) %>%
+  update_role(id, new_role = "ID") %>% 
+  step_impute_knn(all_numeric_predictors()) %>% 
+  step_impute_mode(all_nominal_predictors()) %>% 
+  step_dummy(all_nominal_predictors())
+
+logregTesting_wf = workflow() %>%
+  add_recipe(Testing_recipe) %>% 
+  add_model(TestingLog_model)
+
+Testing_fit = fit(logregTesting_wf, data = train)
+```
+##Formatting For Kaggle
+```{r}
+test_predictions = predict(Testing_fit, new_data = Testingtrain, type = "class")
+submission <- Testingtrain %>%
+  select(id) %>%
+  bind_cols(test_predictions) %>%
+  rename(failure = .pred_class)
+
+write.csv(submission, "Beck_kaggle_submission.csv", row.names = FALSE)
+```
+

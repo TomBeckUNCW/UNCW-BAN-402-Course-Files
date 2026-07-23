@@ -1,0 +1,158 @@
+---
+title: "Beck Course Project Phase 2"
+output: word_document
+date: "2026-07-23"
+---
+#Course Project Phase 2
+##Libraries
+
+```{r}
+#The libraries were chosen based off of previous lectures and assignments.
+library(tidyverse)
+library(tidymodels)
+library(e1071)
+library(ROCR)
+library(GGally)
+library(mice)
+library(VIM)
+library(rpart)
+library(rpart.plot)
+library(RColorBrewer)
+library(rattle)
+library(naniar)
+library(skimr)
+library(UpSetR)
+library(caret)
+library(ranger)
+library(xgboost)
+library(usemodels)
+library(nnet)
+```
+
+##Data Sets
+
+```{r}
+Training = read_csv("train.csv")
+Testing = read_csv("test.csv")
+```
+
+##Converting Characters To Factors
+```{r}
+Training = Training %>% mutate(product_code = as_factor(product_code))%>%
+  mutate(attribute_0 = as_factor(attribute_0)) %>% mutate(attribute_1 = as_factor(attribute_1))%>%
+  mutate(failure = as_factor(failure))
+```
+
+## Missing Data Visualization
+
+```{r}
+gg_miss_var(Training)
+```
+
+
+##Missing Data Imputation
+```{r}
+set.seed(1234)
+imp_measurements = mice(Training, m=67, method='pmm', printFlag=FALSE)#m value is based off of a rough estimate off all the missing data divided by the total observations
+```
+##Data Merge
+```{r}
+Training_Complete = complete(imp_measurements)
+```
+##Data Split
+```{r}
+set.seed(1234)
+Training_split = initial_split(Training_Complete, prop = 0.70, strata = failure)
+train = training(Training_split)
+test = testing(Training_split)
+```
+##Logistic Regression Model
+```{r}
+TrainingLog_model = logistic_reg(mode = "classification") %>%
+  set_engine("glm")
+
+Training_recipe = recipe(failure ~ ., data = train) %>%
+  update_role(id, new_role = "ID") %>% 
+  step_impute_knn(all_numeric_predictors()) %>% 
+  step_impute_mode(all_nominal_predictors()) %>% 
+  step_dummy(all_nominal_predictors())
+
+logregTraining_wf = workflow() %>%
+  add_recipe(Training_recipe) %>% 
+  add_model(TrainingLog_model)
+
+Training_fit = fit(logregTraining_wf, data = train)
+```
+##Logistic Prediction
+```{r}
+predict(Training_fit,new_data = train, type = "prob")
+```
+
+##Class Tree Model
+```{r}
+Training_tree_model = decision_tree() %>% 
+  set_engine("rpart", model = TRUE) %>% #don't forget the model = TRUE flag
+  set_mode("classification")
+
+TrainingTree_wflow = 
+  workflow() %>% 
+  add_model(Training_tree_model) %>% 
+  add_recipe(Training_recipe)
+
+TrainingTree_fit = fit(TrainingTree_wflow, train)
+```
+##Class Tree Predicition
+```{r}
+TrainingTree_fit %>%
+  extract_fit_parsnip() %>%
+  pluck("fit")  
+```
+```{r}
+Trainingtree = TrainingTree_fit %>% 
+  pull_workflow_fit() %>% 
+  pluck("fit")
+
+rpart.plot(Trainingtree)
+```
+##Neural Nets Model
+```{r}
+start_time <- Sys.time()
+
+churn_recipe <- recipe(failure ~ ., data = train) %>%
+  update_role(id, new_role = "ID") %>% 
+  step_impute_knn(all_numeric_predictors()) %>%   
+  step_impute_mode(all_nominal_predictors()) %>%  
+  step_normalize(all_numeric_predictors()) %>%    
+  step_dummy(all_nominal_predictors())            
+
+churn_model <- mlp(
+  hidden_units = tune(), 
+  penalty = tune(), 
+  epochs = tune()
+) %>%
+  set_mode("classification") %>% 
+  set_engine("nnet", verbose = 0)
+
+churn_workflow <- workflow() %>% 
+  add_recipe(churn_recipe) %>% 
+  add_model(churn_model) 
+
+set.seed(1234)
+folds <- vfold_cv(train, v = 5, strata = failure)
+
+neural_tune <- tune_grid(
+  churn_workflow, 
+  resamples = folds, 
+  grid = 25
+)
+
+end_time = Sys.time()
+print(end_time - start_time)
+```
+##Neural Net Prediction
+```{r}
+# Predict class labels
+Trainingnet_pred = predict(Training_fit, new_data = train, type = "class")
+head(Trainingnet_pred)
+```
+
